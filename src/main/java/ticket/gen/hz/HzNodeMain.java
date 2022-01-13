@@ -5,6 +5,13 @@ import com.hazelcast.collection.ISet;
 import com.hazelcast.config.Config;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.instance.impl.HazelcastInstanceImpl;
+import com.hazelcast.instance.impl.HazelcastInstanceProxy;
+import com.hazelcast.internal.partition.InternalPartition;
+import com.hazelcast.internal.partition.InternalPartitionService;
+import com.hazelcast.internal.partition.PartitionReplica;
+import com.hazelcast.internal.partition.PartitionStateGenerator;
+import com.hazelcast.internal.partition.impl.PartitionStateGeneratorImpl;
 import com.hazelcast.partition.PartitionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +53,9 @@ public class HzNodeMain {
         hzConfig.setProperty("hazelcast.shutdownhook.enabled", "false");
         final HazelcastInstance hz = Hazelcast.newHazelcastInstance(hzConfig);
         final PartitionService partitionService = hz.getPartitionService();
+        HazelcastInstanceImpl hzImpl = ((HazelcastInstanceProxy)hz).getOriginal();
+        InternalPartitionService internalPartitionService = hzImpl.node.getPartitionService();
+
         final ISet<RedisMarketKey> distributedKeyspace = hz.getSet("distributedKeyspace");
         final IQueue<String> cmds = hz.getQueue("cmds");
 
@@ -100,11 +110,30 @@ public class HzNodeMain {
             Set<Integer> ownedPartitionIds = partitionToHashTags.ownedPartitionIds();
             System.out.println("owner partition-ids");
             System.out.println(ownedPartitionIds);
+
+            InternalPartition[] currentState = internalPartitionService.getInternalPartitions();
+            printMyPartitions(currentState);
+
+            PartitionStateGenerator consistentHashing = new PartitionStateGeneratorImpl();
+            PartitionReplica[][] newState = consistentHashing.arrange(null, currentState);
             //**************************************************
 
             ThreadSleep.sleep(1000);
             log.warn("Shutting down hz node..");
             hz.shutdown();
         }));
+    }
+
+    //Helpers:
+
+    private static void printMyPartitions(InternalPartition[] internalPartitions) {
+        System.out.println("----------------start of myPartitionIds'---------------");
+        final int[] myPartitionIds = {14, 72, 96, 100, 134, 180, 240, 269};
+        for (int myPartitionId : myPartitionIds) {
+            InternalPartition internalPartition = internalPartitions[myPartitionId];
+            PartitionReplica replica = internalPartition.getReplica(0);
+            System.out.printf("%d: %s\n", myPartitionId, replica);
+        }
+        System.out.println("----------------end of myPartitionIds'---------------");
     }
 }

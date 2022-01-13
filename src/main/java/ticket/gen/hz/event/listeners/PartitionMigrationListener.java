@@ -47,6 +47,7 @@ public class PartitionMigrationListener implements MigrationListener {
                         lazyRedisSubscriber.interrupt();
                         System.out.printf("on-migration disconnecting from %s..\n", lazyRedisSubscriber.getHashTag());
                     } else {
+                        //todo: only connect if not already connected (happens on a sigkill of other node)
                         Thread t = new Thread(lazyRedisSubscriber);
                         t.start();
                         System.out.printf("on-migration connecting to %s..\n", lazyRedisSubscriber.getHashTag());

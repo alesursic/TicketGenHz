@@ -3,7 +3,6 @@ package ticket.gen.hz.redis;
 import com.hazelcast.collection.ISet;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisCluster;
-import ticket.gen.hz.helpers.HashTag;
 import ticket.gen.hz.state.RedisMarketKey;
 
 import java.util.function.Function;

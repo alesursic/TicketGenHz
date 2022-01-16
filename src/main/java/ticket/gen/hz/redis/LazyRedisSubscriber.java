@@ -1,7 +1,6 @@
 package ticket.gen.hz.redis;
 
 import redis.clients.jedis.Jedis;
-import ticket.gen.hz.helpers.HashTag;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;

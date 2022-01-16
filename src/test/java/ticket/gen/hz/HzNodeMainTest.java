@@ -94,6 +94,14 @@ public class HzNodeMainTest {
         //PASS
     }
 
+    /*
+     * This is the load test of the application.
+     * It's writing keys into redis cluster and user must be (manually) restarting various hazelcast nodes
+     * one by one (2 out of 3 nodes must be alive at all times).
+     * Verification is done by sending "partitions" command on hazelcast management tool
+     * in order to determine the number of keys in hazelcast cluster.
+     * The loss should be less than 0.1%.
+     */
     @Test
     public void loadTest() {
         JedisCluster jedisCluster = new JedisCluster(new HostAndPort("localhost", 7000));

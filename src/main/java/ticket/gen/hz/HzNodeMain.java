@@ -2,68 +2,49 @@ package ticket.gen.hz;
 
 import com.hazelcast.collection.IQueue;
 import com.hazelcast.collection.ISet;
-import com.hazelcast.config.Config;
-import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
-import com.hazelcast.instance.impl.HazelcastInstanceImpl;
-import com.hazelcast.instance.impl.HazelcastInstanceProxy;
-import com.hazelcast.internal.partition.InternalPartition;
-import com.hazelcast.internal.partition.InternalPartitionService;
-import com.hazelcast.internal.partition.PartitionReplica;
-import com.hazelcast.internal.partition.PartitionStateGenerator;
-import com.hazelcast.internal.partition.impl.PartitionStateGeneratorImpl;
+import com.hazelcast.partition.Partition;
 import com.hazelcast.partition.PartitionService;
+import com.hazelcast.topic.ITopic;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.JedisCluster;
-import ticket.gen.hz.core.HzNode;
+import ticket.gen.hz.core.HazelcastInstanceFactory;
+import ticket.gen.hz.core.HzQueueHandler;
 import ticket.gen.hz.core.PartitionToHashTags;
 import ticket.gen.hz.core.PartitionToRedisSubscribers;
-import ticket.gen.hz.event.listeners.PartitionMigrationListener;
-import ticket.gen.hz.helpers.HashTag;
-import ticket.gen.hz.helpers.HashTagToPartition;
-import ticket.gen.hz.helpers.ThreadSleep;
+import ticket.gen.hz.event.listeners.ConnectOnRebalance;
+import ticket.gen.hz.event.listeners.DisconnectOnBootstrap;
+import ticket.gen.hz.helpers.HashTagToPartitionF;
+import ticket.gen.hz.helpers.ThreadUtil;
+import ticket.gen.hz.redis.HashTag;
+import ticket.gen.hz.redis.LazyRedisSubscriber;
 import ticket.gen.hz.redis.RedisSubscriberProvider;
 import ticket.gen.hz.state.RedisMarketKey;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static java.util.stream.Collectors.*;
+import static ticket.gen.hz.helpers.ThreadUtil.subscribeToRedis;
 
 public class HzNodeMain {
     private static final Logger log = LoggerFactory.getLogger(HzNodeMain.class);
 
-    public static final List<String> config = Arrays.asList(
-            "{develop:bk:0}",
-            "{staging:bk:0}",
-            "{develop:bk:24505}",
-            "{develop:bk:24497}",
-            "{staging:bk:24516}",
-            "{develop:m:0}",
-            "{staging:m:0}",
-            "{staging:bk:26653}"
-    );
-
     public static void main(String[] args) {
-        Config hzConfig = new Config() ;
-        hzConfig.setProperty("hazelcast.shutdownhook.enabled", "false");
-        final HazelcastInstance hz = Hazelcast.newHazelcastInstance(hzConfig);
+        log.info("---------------------------------------hz-node-main------------------------------------");
+        HazelcastInstance hz = HazelcastInstanceFactory.create();
         final PartitionService partitionService = hz.getPartitionService();
-        HazelcastInstanceImpl hzImpl = ((HazelcastInstanceProxy)hz).getOriginal();
-        InternalPartitionService internalPartitionService = hzImpl.node.getPartitionService();
-
         final ISet<RedisMarketKey> distributedKeyspace = hz.getSet("distributedKeyspace");
         final IQueue<String> cmds = hz.getQueue("cmds");
 
-        JedisCluster jedisCluster = new JedisCluster(new HostAndPort("localhost", 7000));
+        final JedisCluster jedisCluster = new JedisCluster(new HostAndPort("localhost", 7000));
         final RedisSubscriberProvider redisSubscriberProvider = new RedisSubscriberProvider(distributedKeyspace, jedisCluster);
-
-        final HashTagToPartition toPartition = new HashTagToPartition(partitionService::getPartition);
-        final PartitionToHashTags partitionToHashTags = new PartitionToHashTags(config
+        final HashTagToPartitionF toPartition = new HashTagToPartitionF(partitionService::getPartition);
+        final PartitionToHashTags partitionToHashTags = new PartitionToHashTags(HazelcastInstanceFactory
+                .config
                 .stream()
                 .map(HashTag::fromString)
                 .collect(groupingBy(toPartition, toSet()))
@@ -79,61 +60,47 @@ public class HzNodeMain {
                                 .collect(toSet())
                 ))
         );
-        //********************************************Redis*****************************************
-        //NOTE: Has partition migration completed by this point?
-        //creates and starts redis threads
+
+        //Event listeners:
+        Set<Integer> lostPartitionIds = ConcurrentHashMap.newKeySet();
+        partitionService.addMigrationListener(
+                new ConnectOnRebalance(allRedisSubscribers, lostPartitionIds)
+        );
+
+        ITopic<Integer> disconnectOnBootstrapTopic = hz.getTopic("disconnect-on-bootstrap");
+        disconnectOnBootstrapTopic.addMessageListener(new DisconnectOnBootstrap(lostPartitionIds, allRedisSubscribers));
         allRedisSubscribers
                 .streamLocal()
-                .forEach(entry -> entry
-                                .getValue()
-                                .stream()
-                                .forEach(redisSubscriber -> {
-                                    System.out.println("on-bootstrap connecting to Redis " + redisSubscriber.getHashTag());
-                                    Thread t = new Thread(redisSubscriber);
-                                    t.start();
-                                })
+                .forEach(entry -> {
+                            Partition partition = entry.getKey();
+                            Set<LazyRedisSubscriber> redisSubscribers = entry.getValue();
+
+                            redisSubscribers.forEach(redisSubscriber -> {
+                                subscribeToRedis(log, redisSubscriber, "on-bootstrap");
+                                ThreadUtil.sleep(250); //duplicate connections for a short time
+                                disconnectOnBootstrapTopic.publish(partition.getPartitionId());
+                            });
+                        }
                 );
+        //.
 
-        partitionService.addMigrationListener(new PartitionMigrationListener(allRedisSubscribers));
-        //******************************************************************************************
+        Thread hzNodeThread = new Thread(
+                new HzQueueHandler(partitionService, cmds, distributedKeyspace, partitionToHashTags),
+                "hz-node-thread"
+        );
+        hzNodeThread.start();
 
-        HzNode hzNode = new HzNode(partitionService, cmds, distributedKeyspace, partitionToHashTags);
-        Thread t = new Thread(hzNode, "hz-node-thread");
-        t.start();
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("Starting shutdown hook");
-            t.interrupt();
-            System.out.println("Interrupted current thread");
-
-            //**************************************************
-            Set<Integer> ownedPartitionIds = partitionToHashTags.ownedPartitionIds();
-            System.out.println("owner partition-ids");
-            System.out.println(ownedPartitionIds);
-
-            InternalPartition[] currentState = internalPartitionService.getInternalPartitions();
-            printMyPartitions(currentState);
-
-            PartitionStateGenerator consistentHashing = new PartitionStateGeneratorImpl();
-            PartitionReplica[][] newState = consistentHashing.arrange(null, currentState);
-            //**************************************************
-
-            ThreadSleep.sleep(1000);
-            log.warn("Shutting down hz node..");
-            hz.shutdown();
-        }));
-    }
-
-    //Helpers:
-
-    private static void printMyPartitions(InternalPartition[] internalPartitions) {
-        System.out.println("----------------start of myPartitionIds'---------------");
-        final int[] myPartitionIds = {14, 72, 96, 100, 134, 180, 240, 269};
-        for (int myPartitionId : myPartitionIds) {
-            InternalPartition internalPartition = internalPartitions[myPartitionId];
-            PartitionReplica replica = internalPartition.getReplica(0);
-            System.out.printf("%d: %s\n", myPartitionId, replica);
-        }
-        System.out.println("----------------end of myPartitionIds'---------------");
+        Runtime
+                .getRuntime()
+                .addShutdownHook(new Thread(() -> {
+                    /*
+                     * Shutdown does not disconnect from redis on the member leaving the cluster
+                     * while connections are formed in members receiving these partitions
+                     * Sleep has to be long enough so that double connections are kept until receiving members
+                     * successfully reconnect.
+                     */
+                    hz.shutdown();
+                    ThreadUtil.sleep(500); //of course an ack is a safer approach than sleep
+                }));
     }
 }

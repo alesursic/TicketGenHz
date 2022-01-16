@@ -1,4 +1,4 @@
-package ticket.gen.hz.helpers;
+package ticket.gen.hz.redis;
 
 import redis.clients.jedis.util.JedisClusterCRC16;
 

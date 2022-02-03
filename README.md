@@ -1,8 +1,9 @@
-<h1>Ticket Generator Hazelcast</h1>
+<h1>Ticket Generator In-Mem Data Grid</h1>
+
+<p>Ticket generator rewrite into Hazelcast and Akka clusters.</p>
 
 <h2>Intro</h2>
-
-<p>Ticket generator rewrite into Hazelcast cluster.</p> 
+ 
 <p>Redis keys (dirty keys) representing status data and meta data is a distributed in-mem state of the cluster. 
 Redis values for these keys are not a part of the in-mem state.</p>
 

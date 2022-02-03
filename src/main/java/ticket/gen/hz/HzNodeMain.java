@@ -10,10 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.JedisCluster;
-import ticket.gen.hz.core.HazelcastInstanceFactory;
-import ticket.gen.hz.core.HzQueueHandler;
-import ticket.gen.hz.core.PartitionToHashTags;
-import ticket.gen.hz.core.PartitionToRedisSubscribers;
+import ticket.gen.hz.core.*;
 import ticket.gen.hz.event.listeners.ConnectOnRebalance;
 import ticket.gen.hz.event.listeners.DisconnectOnBootstrap;
 import ticket.gen.hz.helpers.HashTagToPartitionF;
@@ -43,8 +40,7 @@ public class HzNodeMain {
         final JedisCluster jedisCluster = new JedisCluster(new HostAndPort("localhost", 7000));
         final RedisSubscriberProvider redisSubscriberProvider = new RedisSubscriberProvider(distributedKeyspace, jedisCluster);
         final HashTagToPartitionF toPartition = new HashTagToPartitionF(partitionService::getPartition);
-        final PartitionToHashTags partitionToHashTags = new PartitionToHashTags(HazelcastInstanceFactory
-                .config
+        final PartitionToHashTags partitionToHashTags = new PartitionToHashTags(AllowedHashTagsConfig
                 .stream()
                 .map(HashTag::fromString)
                 .collect(groupingBy(toPartition, toSet()))

@@ -3,10 +3,11 @@ package ticket.gen.akka.redis1;
 import akka.actor.typed.ActorRef
 import com.hazelcast.collection.ISet
 import redis.clients.jedis.JedisPubSub
+import ticket.gen.akka.setactors.SetDispatcher
 import ticket.gen.hz.state.RedisMarketKey;
 
 //Jedis 3rd party lib that just forwards all messages passed in via it's callback to main actor
-class JedisPubSubImpl(redisKeysActor: ActorRef[RedisMarketKey]) extends JedisPubSub {
+class JedisPubSubImpl(redisKeysActor: ActorRef[SetDispatcher.Command]) extends JedisPubSub {
     private val KEYSPACE_PREFIX = "__keyspace@0__:";
 
     /**
@@ -21,7 +22,7 @@ class JedisPubSubImpl(redisKeysActor: ActorRef[RedisMarketKey]) extends JedisPub
             case "hset" =>
                 val changedKey: String = channel.split(KEYSPACE_PREFIX)(1);
                 val msg = RedisMarketKey.parse(changedKey)
-                redisKeysActor ! msg
+                redisKeysActor ! SetDispatcher.AddKey(msg)
         }
     }
 }

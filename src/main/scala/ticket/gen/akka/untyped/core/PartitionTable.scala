@@ -1,46 +1,43 @@
-package ticket.gen.akka.core
+package ticket.gen.akka.untyped.core
 
-import akka.actor.typed.ActorRef
+import akka.actor.ActorRef
 import akka.cluster.Member
-import ticket.gen.akka.core.PartitionTable.{Add, Change, Del, SetDispatcherRef}
-import ticket.gen.akka.setactors.SetDispatcher.Command
+import ticket.gen.akka.untyped.core.PartitionTable._
 
 import scala.collection.immutable.{Map, Set}
 
 object PartitionTable {
-  type SetDispatcherRef = ActorRef[Command]
-  
   sealed trait Change
-  case class Add(m: SetDispatcherRef, pId: Int) extends Change
-  case class Del(m: SetDispatcherRef, pId: Int) extends Change
+  case class Add(m: ActorRef, pId: Int) extends Change
+  case class Del(m: ActorRef, pId: Int) extends Change
 
   val EMPTY = PartitionTable(8, Set(), Map())
 }
 
 class PartitionTable(
   numOfPartitions: Int, 
-  members: Set[SetDispatcherRef], 
-  partitionIdMember: Map[Int, SetDispatcherRef]
+  members: Set[ActorRef],
+  partitionIdMember: Map[Int, ActorRef]
 ) {
   def apply(pId: Int) = partitionIdMember(pId)
 
-  def addMemberAndRebalance(newMember: SetDispatcherRef): PartitionTable = {
+  def addMemberAndRebalance(newMember: ActorRef): PartitionTable = {
     val newMembers = members + newMember
     newPartitionTable(newMembers, rebalance(newMembers))
   }
 
-  def removeMemberAndRebalance(oldMember: SetDispatcherRef): PartitionTable = {
+  def removeMemberAndRebalance(oldMember: ActorRef): PartitionTable = {
     val newMembers = members - oldMember
     newPartitionTable(newMembers, rebalance(newMembers))
   }
 
-  def containsMember(m: SetDispatcherRef): Boolean = {
+  def containsMember(m: ActorRef): Boolean = {
     members.contains(m)
   }
 
   def numOfMembers(): Int = members.size
 
-  def getPartitionIdMember(): Map[Int, SetDispatcherRef] = partitionIdMember
+  def getPartitionIdMember(): Map[Int, ActorRef] = partitionIdMember
 
   /**
    * Calcluates difference between old and new partition tables
@@ -74,14 +71,14 @@ class PartitionTable(
 
   //Helpers:
 
-  def newPartitionTable(x: (Set[SetDispatcherRef], Map[Int, SetDispatcherRef])): PartitionTable = {
+  def newPartitionTable(x: (Set[ActorRef], Map[Int, ActorRef])): PartitionTable = {
     PartitionTable(numOfPartitions, x._1, x._2)
   }
 
-  def rebalance(newMembers: Set[SetDispatcherRef]): Map[Int, SetDispatcherRef] = {
+  def rebalance(newMembers: Set[ActorRef]): Map[Int, ActorRef] = {
     //members ordered in-line starting with 0
     val idxMember = Seq.range(0, newMembers.size).zip(newMembers).toMap
-    val partitionIdToMember: Int => SetDispatcherRef = pId => idxMember(pId % newMembers.size)
+    val partitionIdToMember: Int => ActorRef = pId => idxMember(pId % newMembers.size)
 
     Seq
       .range(0, numOfPartitions)

@@ -1,19 +1,19 @@
-package ticket.gen.akka.core
+package ticket.gen.akka.typed.core
 
 import akka.actor.typed.Behavior
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import akka.cluster.ClusterEvent.MemberEvent
-import ticket.gen.akka.core.PartitionTable.{Add, Change, Del}
-import ticket.gen.akka.setactors.SetDispatcher
-import ticket.gen.akka.setactors.SetDispatcher.{AddSetActor, RemoveSetActor, SetDispatcherKey}
+import ticket.gen.akka.typed.core.PartitionTable.{Add, Change, Del}
+import ticket.gen.akka.typed.setactors.SetDispatcher
+import ticket.gen.akka.typed.setactors.SetDispatcher.{AddSetActor, RemoveSetActor, SetDispatcherKey}
 
-object SetDispatcherGuardian {
+object SetDispatcherCoordinator {
   def apply(): Behavior[Receptionist.Listing] =
     Behaviors.setup[Receptionist.Listing](context => {
       context.system.receptionist ! Receptionist.Subscribe(SetDispatcherKey, context.self)
-      context.spawnAnonymous(SetDispatcher())
-      new SetDispatcherGuardian(context, PartitionTable.EMPTY)
+      context.spawnAnonymous(SetDispatcher()) //local
+      new SetDispatcherCoordinator(context, PartitionTable.EMPTY)
     })
 }
 
@@ -24,7 +24,7 @@ object SetDispatcherGuardian {
  * It then triggers rebalance of the cluster by first calculating the new partition table and then
  * sends commands to SetDispatchers on all members to either delete partition they own or to create a new one
  */
-class SetDispatcherGuardian(
+class SetDispatcherCoordinator(
   context: ActorContext[Receptionist.Listing],
   var partitionTable: PartitionTable
 ) extends AbstractBehavior[Receptionist.Listing](context) {
@@ -46,7 +46,7 @@ class SetDispatcherGuardian(
           partitionTable = newPartitionTable
 
           //NOTE: It may also send a message to itself (this member's set dispatcher)
-          changes foreach (change => change match {
+          changes foreach ({
             case Add(m, pId) => {
               m ! AddSetActor(pId)
             }

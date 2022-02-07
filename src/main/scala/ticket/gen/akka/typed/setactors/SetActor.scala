@@ -1,8 +1,8 @@
-package ticket.gen.akka.setactors
+package ticket.gen.akka.typed.setactors
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
-import ticket.gen.akka.setactors.SetActor.*
+import ticket.gen.akka.typed.setactors.SetActor.*
 import ticket.gen.hz.state.RedisMarketKey;
 
 object SetActor {

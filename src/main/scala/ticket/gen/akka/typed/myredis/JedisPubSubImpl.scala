@@ -1,9 +1,9 @@
-package ticket.gen.akka.myredis;
+package ticket.gen.akka.typed.myredis;
 
 import akka.actor.typed.ActorRef
 import com.hazelcast.collection.ISet
 import redis.clients.jedis.JedisPubSub
-import ticket.gen.akka.setactors.SetDispatcher
+import ticket.gen.akka.typed.setactors.SetDispatcher
 import ticket.gen.hz.state.RedisMarketKey;
 
 //Jedis 3rd party lib that just forwards all messages passed in via it's callback to main actor

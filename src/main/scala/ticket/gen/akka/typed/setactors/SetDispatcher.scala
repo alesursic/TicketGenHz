@@ -1,10 +1,10 @@
-package ticket.gen.akka.setactors
+package ticket.gen.akka.typed.setactors
 
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import ticket.gen.hz.state.RedisMarketKey
-import ticket.gen.akka.setactors.SetDispatcher.{AddKey, AddSetActor, Command, GetKeys, RemoveSetActor}
+import ticket.gen.akka.typed.setactors.SetDispatcher.{AddKey, AddSetActor, Command, GetKeys, RemoveSetActor}
 import ticket.gen.hz.redis.HashTag
 
 object SetDispatcher {

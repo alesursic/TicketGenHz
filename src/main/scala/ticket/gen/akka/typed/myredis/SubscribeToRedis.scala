@@ -1,11 +1,11 @@
-package ticket.gen.akka.myredis
+package ticket.gen.akka.typed.myredis
 
 import akka.actor.typed.ActorRef
 import ticket.gen.hz.helpers.ThreadUtil
 import redis.clients.jedis.{HostAndPort, JedisCluster}
 import ticket.gen.hz.redis.{HashTag, LazyRedisSubscriber}
 import org.slf4j.Logger
-import ticket.gen.akka.setactors.SetDispatcher
+import ticket.gen.akka.typed.setactors.SetDispatcher
 
 object SubscribeToRedis {
   def apply(hashTag: HashTag, logger: Logger, setActor: ActorRef[SetDispatcher.Command]): Unit = {

@@ -40,14 +40,20 @@
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
-            <artifactId>akka-actor-testkit-typed_3</artifactId>
+            <artifactId>akka-cluster-typed_3</artifactId>
             <version>2.6.18</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
-            <artifactId>akka-cluster-typed_3</artifactId>
+            <artifactId>akka-remote_3</artifactId>
             <version>2.6.18</version>
+        </dependency>
+        <!-- test -->
+        <dependency>
+            <groupId>com.typesafe.akka</groupId>
+            <artifactId>akka-actor-testkit-typed_3</artifactId>
+            <version>2.6.18</version>
+            <scope>test</scope>
         </dependency>
         <!-- AKKA -->
 

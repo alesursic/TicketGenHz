@@ -1,4 +1,4 @@
-package ticket.gen.akka.redis1;
+package ticket.gen.akka.myredis;
 
 import akka.actor.typed.ActorRef
 import com.hazelcast.collection.ISet

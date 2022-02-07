@@ -4,33 +4,40 @@ import akka.actor.typed.Behavior
 import akka.actor.typed.receptionist.Receptionist
 import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
 import akka.cluster.ClusterEvent.MemberEvent
-import ticket.gen.akka.core.PartitionTable2.{Add, Change, Del}
+import ticket.gen.akka.core.PartitionTable.{Add, Change, Del}
 import ticket.gen.akka.setactors.SetDispatcher
 import ticket.gen.akka.setactors.SetDispatcher.{AddSetActor, RemoveSetActor, SetDispatcherKey}
 
-//todo: use ClusterSingleton
 object SetDispatcherGuardian {
   def apply(): Behavior[Receptionist.Listing] =
     Behaviors.setup[Receptionist.Listing](context => {
       context.system.receptionist ! Receptionist.Subscribe(SetDispatcherKey, context.self)
-      context.spawnAnonymous(SetDispatcher()) //can there be a race condition (guardian not listening yet)
-
-      new SetDispatcherGuardian(context, PartitionTable2.EMPTY)
+      context.spawnAnonymous(SetDispatcher())
+      new SetDispatcherGuardian(context, PartitionTable.EMPTY)
     })
 }
 
+/*
+ * Shard Coordinator (Singleton actor)
+ *
+ * This actor gets notified via the receptionist that SetDispatcher was deployed on a newly joined member
+ * It then triggers rebalance of the cluster by first calculating the new partition table and then
+ * sends commands to SetDispatchers on all members to either delete partition they own or to create a new one
+ */
 class SetDispatcherGuardian(
   context: ActorContext[Receptionist.Listing],
-  var partitionTable: PartitionTable2
+  var partitionTable: PartitionTable
 ) extends AbstractBehavior[Receptionist.Listing](context) {
   override def onMessage(msg: Receptionist.Listing): Behavior[Receptionist.Listing] = {
     msg match {
       case SetDispatcher.SetDispatcherKey.Listing(listings) =>
+        val numOfNewMembers = listings.size
+        val numOfOldMembers = partitionTable.numOfMembers()
         /*
          * listing either contains one actor more or one actor less than partition table
          * because an actor (or member) just left or joined the cluster
          */
-        if (listings.size > partitionTable.numOfMembers()) {
+        if (numOfNewMembers > numOfOldMembers) {
           context.log.info("Partition rebalancing started due to a joining member")
           val joinedMember = listings.find(!partitionTable.containsMember(_)).get
 
@@ -47,7 +54,7 @@ class SetDispatcherGuardian(
               m ! RemoveSetActor(pId)
             }
           })
-        } else {
+        } else if (numOfNewMembers < numOfOldMembers) {
           context.log.info("Partition rebalancing started due to a leaving member")
           //todo: implement
         }

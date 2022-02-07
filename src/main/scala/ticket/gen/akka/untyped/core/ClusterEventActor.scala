@@ -1,6 +1,5 @@
 package ticket.gen.akka.untyped.core
 
-import aia.cluster.words.JobWorker
 import akka.actor.{Actor, ActorLogging, Deploy, Props, ActorRef}
 import akka.cluster.ClusterEvent.*
 import akka.cluster.{Cluster, MemberStatus}

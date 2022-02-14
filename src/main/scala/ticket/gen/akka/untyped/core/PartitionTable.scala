@@ -7,12 +7,14 @@ import scala.collection.immutable.{Map, Set}
 
 object PartitionTable {
   val NUM_OF_PARTITIONS = 8 //todo: extract from config
-  sealed trait Change
-  case class Add(m: Address, pId: Int) extends Change
-  case class Del(m: Address, pId: Int) extends Change
+  sealed trait Change(m: Address) {
+    def getAddress() = m
+  }
+  case class Add(m: Address, pId: Int) extends Change(m)
+  case class Del(m: Address, pId: Int) extends Change(m)
   val EMPTY = new PartitionTable(Map())
 
-  def apply(newMembers: Set[Address]): PartitionTable = {
+  def apply(newMembers: List[Address]): PartitionTable = {
     val idxMember = Seq.range(0, newMembers.size).zip(newMembers).toMap
     val partitionIdToMember: Int => Address = pId => idxMember(pId % newMembers.size)
 

@@ -4,7 +4,7 @@ import akka.actor.*
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings}
-import ticket.gen.akka.untyped.core.{ClusterEventActor, PartitionTable, PubSubActor}
+import ticket.gen.akka.untyped.core.{ClusterEventActor, PartitionTable}
 
 object UntypedMain {
   def main(args: Array[String]): Unit = {

@@ -4,7 +4,7 @@ import akka.actor.*
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings}
-import ticket.gen.akka.untyped.core.{ClusterEventActor, PartitionTable}
+import ticket.gen.akka.untyped.core.{ClusterEventActor, PartitionTable, PubSubActor}
 
 object UntypedMain {
   def main(args: Array[String]): Unit = {
@@ -12,12 +12,8 @@ object UntypedMain {
     val system = ActorSystem("RedisKeysSys", config)
 
     system.actorOf(
-      ClusterSingletonManager.props(
         Props(classOf[ClusterEventActor], PartitionTable.EMPTY),
-        terminationMessage = "end",
-        settings = ClusterSingletonManagerSettings(system),
-      ),
-      "cluster-event-actor"
+        "cluster-event-actor"
     )
   }
 }

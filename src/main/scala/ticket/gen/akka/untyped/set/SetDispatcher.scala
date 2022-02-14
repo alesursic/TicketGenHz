@@ -1,8 +1,8 @@
-package ticket.gen.akka.untyped.setactors
+package ticket.gen.akka.untyped.set
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import ticket.gen.hz.state.RedisMarketKey
-import ticket.gen.akka.untyped.setactors.SetDispatcher.*
+import ticket.gen.akka.untyped.set.SetDispatcher.*
 
 object SetDispatcher {
   sealed trait Command

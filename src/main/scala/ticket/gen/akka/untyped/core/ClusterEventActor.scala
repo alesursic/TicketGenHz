@@ -10,74 +10,59 @@ import ticket.gen.akka.untyped.core.PartitionTable.{Add, Change, Del}
 import ticket.gen.akka.untyped.set.SetDispatcher
 import ticket.gen.akka.untyped.set.SetDispatcher.{AddSetActor, RemoveSetActor}
 import akka.cluster.pubsub.DistributedPubSubMediator.{Publish, Subscribe, SubscribeAck, Unsubscribe}
-import fj.data.Set.member
-import ticket.gen.akka.untyped.core.ClusterEventActor.{IDENTIFY_ID, PartitionTableBroadcast, TOPIC}
+import ticket.gen.akka.untyped.core.ActorRefDiscoveryJob.DiscoveryResult
+import ticket.gen.akka.untyped.core.ClusterEventActor.{Changes, IDENTIFY_ID, PartitionTableBroadcast}
 
+import scala.collection.immutable
 import scala.collection.mutable.{Map, Set}
 
 object ClusterEventActor {
   val IDENTIFY_ID = 1
-  val TOPIC = "registration"
   case class PartitionTableBroadcast(in: PartitionTable)
+  case class Changes(in: List[Change])
 }
 
 class ClusterEventActor(var partitionTable: PartitionTable) extends Actor with ActorLogging {
   var isLeader = false
-  val members: Map[Address, ActorRef] = Map()
+  var members: Map[Address, ActorRef] = Map()
 
   val setDispatcher = context.actorOf(Props(classOf[SetDispatcher])) //local "deployment" and rebalance
   cluster().subscribe(self, classOf[ClusterDomainEvent])
 
   def receive = {
-    case ActorIdentity(`IDENTIFY_ID`, Some(remoteClusterEventActor)) if isLeader =>
-      log.info("Actor {} identified", remoteClusterEventActor)
-      members.put(remoteClusterEventActor.path.address, remoteClusterEventActor)
-      val newPartitionTable = PartitionTable(members.keys.toList.sorted)
-      broadcast(newPartitionTable)
-
     case MemberUp(member) if isLeader =>
       log.info(s"$member UP.")
-      remoteClusterEventActor(member.address) ! Identify(IDENTIFY_ID)
+      context.actorOf(Props(classOf[ActorRefDiscoveryJob], immutable.Set(member), self))
 
     case MemberExited(member) if isLeader =>
       log.info(s"$member EXITED.")
-      members.remove(member.address)
-      val newPartitionTable = PartitionTable(members.keys.toList.sorted)
-      //When leader is exiting, it publishes the partition table to the new leader (very important)
-      broadcast(newPartitionTable) //including itself!
+      if (member.address != self.path.address) {
+        members.remove(member.address)
+        broadcast(PartitionTable(members.keys.toList.sorted)) //no need to publish, will be auto-detected by new leader
+      }
 
     case LeaderChanged(leader) =>
       leader.foreach(member => log.info(s"$member LEADER_CHANGED."))
       isLeader = leader.contains(cluster().selfAddress)
       if (isLeader) {
+        log.info("New leader in the cluster {}", leader.get)
         /*
          * Node can become a leader in these cases:
          *  1. Bootstrap of the application (only itself is a cluster member)
          *  2. Previous leader exited the cluster (membership list is empty & partition table was transferred on exit)
          *  3. Leadership transfer (split-brain) (membership list is empty & partition table may not have been transferred (yet))
          */
-        val membersTemp = cluster().state.members
-
-        if (membersTemp.size == 1) {
-          members.put(cluster().selfAddress, context.self)
-        } else if (partitionTable.isEmpty()) {
-          //members discovery
-
-        } else {
-
-        }
-
-        val newPartitionTable = PartitionTable(members.keys.toList.sorted)
-        broadcast(newPartitionTable)
-
-
-        //NOTE: Leadership may be stolen from a different node. In this case NOOP because ex-leader will
-        //send us the new partition table (my partition table doesn't contain all members).
-        //todo: detect stealing leadership and skip broadcast
+        val currMembers = cluster().state.members.filter(_.status == MemberStatus.Up)
+        context.actorOf(Props(classOf[ActorRefDiscoveryJob], currMembers, self))
       }
 
+    case DiscoveryResult(newMembers: Map[Address, ActorRef]) if isLeader =>
+      log.info("DISCOVERY.")
+      members.addAll(newMembers)
+      broadcast(PartitionTable(members.keys.toList.sorted))
+
     case PartitionTableBroadcast(newPartitionTable) =>
-      log.info("Received partition table broadcast, will start actual rebalance")
+      log.info("PARTITION_TABLE_BROADCAST.")
       val changes = partitionTable.diff(newPartitionTable)
       partitionTable = newPartitionTable
       changes
@@ -102,14 +87,9 @@ class ClusterEventActor(var partitionTable: PartitionTable) extends Actor with A
 
   def cluster() = Cluster(context.system)
 
-  def remoteClusterEventActor(address: Address): ActorSelection =
-    context.actorSelection(
-      String.format(
-        "%s/user/cluster-event-actor",
-        address
-      )
-    )
-
   def broadcast(newPartitionTable: PartitionTable): Unit =
     members.values.foreach(_ ! PartitionTableBroadcast(newPartitionTable))
+
+  def broadcast(changes: List[Change]): Unit =
+    members.values.foreach(_ ! Changes(changes))
 }

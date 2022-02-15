@@ -33,6 +33,8 @@ class PartitionTable(
   def apply(pId: Int) = partitionIdToMember(pId)
 
   def getPartitionIdToMember() = partitionIdToMember
+  
+  def isEmpty() = partitionIdToMember.isEmpty
 
   /**
    * Calcluates difference between old and new partition tables

@@ -50,10 +50,26 @@ class ClusterEventActor(var partitionTable: PartitionTable) extends Actor with A
       leader.foreach(member => log.info(s"$member LEADER_CHANGED."))
       isLeader = leader.contains(cluster().selfAddress)
       if (isLeader) {
-        //because member is up before it becomes a leader (handling of Up is missed)
-        members.put(cluster().selfAddress, context.self)
+        /*
+         * Node can become a leader in these cases:
+         *  1. Bootstrap of the application (only itself is a cluster member)
+         *  2. Previous leader exited the cluster (membership list is empty & partition table was transferred on exit)
+         *  3. Leadership transfer (split-brain) (membership list is empty & partition table may not have been transferred (yet))
+         */
+        val membersTemp = cluster().state.members
+
+        if (membersTemp.size == 1) {
+          members.put(cluster().selfAddress, context.self)
+        } else if (partitionTable.isEmpty()) {
+          //members discovery
+
+        } else {
+
+        }
+
         val newPartitionTable = PartitionTable(members.keys.toList.sorted)
         broadcast(newPartitionTable)
+
 
         //NOTE: Leadership may be stolen from a different node. In this case NOOP because ex-leader will
         //send us the new partition table (my partition table doesn't contain all members).

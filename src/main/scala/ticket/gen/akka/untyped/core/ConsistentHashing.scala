@@ -1,40 +1,91 @@
 package ticket.gen.akka.untyped.core
 
+import org.checkerframework.checker.units.qual.{A, m}
+import ticket.gen.akka.untyped.core.ConsistentHashing.{MutTable, Table}
+
 import scala.collection.mutable
 
 object ConsistentHashing {
-  def apply[M, P](table: Map[M, List[P]]): ConsistentHashing[M, P] = new ConsistentHashing(table)
+  type Table[M, P] = Map[M, List[P]]
+  type MutTable[M, P] = mutable.Map[M, List[P]]
+  def apply[M, P](table: Table[M, P]): ConsistentHashing[M, P] = new ConsistentHashing(table)
 }
 
-class ConsistentHashing[M, P](table: Map[M, List[P]]) {
+class ConsistentHashing[M, P](table: Table[M, P]) {
   def getTable() = table
 
   def addMember(newM: M): ConsistentHashing[M, P] = {
-    val newTable: mutable.Map[M, List[P]] = mutable.Map(table.toSeq: _*)
+    val newTable: MutTable[M, P] = mutable.Map(table.toSeq: _*)
     newTable.put(newM, List())
 
-    val max = getMax()
-    val m = max._1
-    val p = max._2.head
-
-    newTable.put(m, newTable(m).tail)
-    newTable.put(newM, p :: newTable(newM))
+    while(getMaxDiff(newTable) > 1) {
+      getMax(newTable) match {
+        case (member, partitions) =>
+          newTable.put(member, partitions.tail)
+          newTable.put(newM, partitions.head :: newTable(newM))
+      }
+    }
 
     ConsistentHashing(newTable.toMap)
   }
 
-  private[this] def getMax(): (M, List[P]) = {
+  def removeMember(oldM: M): ConsistentHashing[M, P] = {
+    val newTable: MutTable[M, P] = mutable.Map(table.toSeq: _*)
+    val oldPartitions: List[P] = newTable.remove(oldM).get //!
+
+    oldPartitions foreach {
+      oldPartition => getMin(newTable) match {
+        case (member, partitions) => newTable.put(member, oldPartition :: partitions)
+      }
+    }
+
+    ConsistentHashing(newTable.toMap)
+  }
+
+  //Helpers:
+
+  //O(n^2)
+  def getMaxDiff(table: MutTable[M, P]): Int = {
+    //all possible pairs without duplicates: [x0, x1, x2] => [(x0, x1), (x0, x2), (x1, x2)]
+    def crossProduct[A](xs: List[A]): List[(A, A)] = xs match {
+      case Nil => List()
+      case head::tail => xs.flatMap(x => tail.zip(List.fill(tail.size)(x))) ++ crossProduct(tail)
+    }
+
     var max = 0
+    val partitionCounts: List[Int] = table.values.map(_.size).toList
+
+    crossProduct(partitionCounts) foreach {
+      case (count0, count1) =>
+        val diff = math.abs(count0 - count1)
+        if (diff > max) { max = diff }
+    }
+
+    max
+  }
+
+  //O(n)
+  def getMax(table: MutTable[M, P]): (M, List[P]) = {
+    getMinOrMax(table, 0, (count, max) => count > max)
+  }
+
+  //O(n)
+  def getMin(table: MutTable[M, P]): (M, List[P]) = {
+    getMinOrMax(table, Int.MaxValue, (count, max) => count < max)
+  }
+
+  //O(n)
+  def getMinOrMax(table: MutTable[M, P], minMax: Int, compare: (Int, Int) => Boolean): (M, List[P]) = {
+    var newMinMax = minMax
     var result: (M, List[P]) = null
 
     table foreach {
-      case (m, ps) => {
+      case (m, ps) =>
         val count = ps.size
-        if (count > max) {
-          max = count
+        if (compare(count, newMinMax)) {
+          newMinMax = count
           result = (m, ps)
         }
-      }
     }
 
     result

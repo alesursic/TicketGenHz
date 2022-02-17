@@ -38,19 +38,20 @@ class ClusterEventActor(var partitionTable: PartitionTable) extends Actor with A
       log.info(s"$member EXITED.")
       if (member.address != self.path.address) {
         members.remove(member.address)
-        broadcast(PartitionTable(members.keys.toList.sorted)) //no need to publish, will be auto-detected by new leader
+        broadcast(PartitionTable(members.keys.toList.sorted))
       }
+    //else: no need to publish, will be auto-detected by new leader
 
     case LeaderChanged(leader) =>
       leader.foreach(member => log.info(s"$member LEADER_CHANGED."))
       isLeader = leader.contains(cluster().selfAddress)
       if (isLeader) {
-        log.info("New leader in the cluster {}", leader.get)
+        log.info("NEW_LEADER in the cluster {}", leader.get)
         /*
          * Node can become a leader in these cases:
          *  1. Bootstrap of the application (only itself is a cluster member)
-         *  2. Previous leader exited the cluster (membership list is empty & partition table was transferred on exit)
-         *  3. Leadership transfer (split-brain) (membership list is empty & partition table may not have been transferred (yet))
+         *  2. Previous leader exited the cluster
+         *  3. Leadership transfer to the first node in seeds list (split-brain)
          */
         val currMembers = cluster().state.members.filter(_.status == MemberStatus.Up)
         context.actorOf(Props(classOf[ActorRefDiscoveryJob], currMembers, self))

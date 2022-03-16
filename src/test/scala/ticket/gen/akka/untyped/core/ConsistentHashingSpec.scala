@@ -17,7 +17,7 @@ class ConsistentHashingSpec extends AnyFlatSpec {
       1 -> List(6, 5, 4),
       2 -> List(7, 3, 8)
     )
-    assert(newCh.getTable() === expected)
+    assert(newCh._1.getTable() === expected)
   }
 
   "Consistent Hashing" should "rebalance partitions when removing a member" in {
@@ -33,19 +33,19 @@ class ConsistentHashingSpec extends AnyFlatSpec {
       0 -> List(4, 6, 2, 1, 0),
       2 -> List(5, 7, 3, 8)
     )
-    assert(newCh.getTable() === expected)
+    assert(newCh._1.getTable() === expected)
   }
 
   "Consistent Hashing" should "rebalance each time after adding/removing members" in {
     val table: Table[Int, Int] = Map(0 -> (0 to 270).toList)
     val initCh = ConsistentHashing(table)
     val endCh = initCh
-        .addMember(1)
-        .addMember(2)
-        .addMember(3)
-        .removeMember(3)
-        .removeMember(0)
-        .addMember(3)
+        .addMember(1)._1
+        .addMember(2)._1
+        .addMember(3)._1
+        .removeMember(3)._1
+        .removeMember(0)._1
+        .addMember(3)._1
 
     val sizesActual = endCh.getTable().values.map(_.size).toList
     val sizesExpected = List(90, 91, 90)

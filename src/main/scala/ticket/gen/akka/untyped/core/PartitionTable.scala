@@ -1,17 +1,13 @@
 package ticket.gen.akka.untyped.core
 
 import akka.actor.*
-import ticket.gen.akka.untyped.core.PartitionTable.{Add, Change, Del, NUM_OF_PARTITIONS}
+import ticket.gen.akka.untyped.core.PartitionTable.{NUM_OF_PARTITIONS}
+import ticket.gen.akka.untyped.core.PartitionChange.{Add, Change, Del}
 
 import scala.collection.immutable.{Map, Set}
 
 object PartitionTable {
   val NUM_OF_PARTITIONS = 8 //todo: extract from config
-  sealed trait Change(m: Address) {
-    def getAddress() = m
-  }
-  case class Add(m: Address, pId: Int) extends Change(m)
-  case class Del(m: Address, pId: Int) extends Change(m)
   val EMPTY = new PartitionTable(Map())
 
   def apply(newMembers: List[Address]): PartitionTable = {
@@ -27,9 +23,7 @@ object PartitionTable {
   }
 }
 
-class PartitionTable(
-  partitionIdToMember: Map[Int, Address]
-) extends Serializable {
+class PartitionTable(partitionIdToMember: Map[Int, Address]) extends Serializable {
   def apply(pId: Int) = partitionIdToMember(pId)
 
   def getPartitionIdToMember() = partitionIdToMember

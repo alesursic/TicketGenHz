@@ -2,6 +2,7 @@ package ticket.gen.akka.untyped.core
 
 import org.checkerframework.checker.units.qual.{A, m}
 import ticket.gen.akka.untyped.core.ConsistentHashing.{MutTable, Table}
+import ticket.gen.akka.untyped.core.PartitionChange.Change
 
 import scala.collection.mutable
 
@@ -14,22 +15,22 @@ object ConsistentHashing {
 class ConsistentHashing[M, P](table: Table[M, P]) {
   def getTable() = table
 
-  def addMember(newM: M): ConsistentHashing[M, P] = {
+  def addMember(newM: M): (ConsistentHashing[M, P], List[Change]) = {
     val newTable: MutTable[M, P] = mutable.Map(table.toSeq: _*)
     newTable.put(newM, List())
 
-    while(getMaxDiff(newTable) > 1) {
-      getMax(newTable) match {
+    while(getMaxDiff(newTable) > 1) {                           //repeat until partitions are not evenly balanced
+      getMax(newTable) match {                                  //find member with most partitions
         case (member, partitions) =>
-          newTable.put(member, partitions.tail)
-          newTable.put(newM, partitions.head :: newTable(newM))
+          newTable.put(member, partitions.tail)                 //remove a partition from old member
+          newTable.put(newM, partitions.head :: newTable(newM)) //add that partition to new member
       }
     }
 
-    ConsistentHashing(newTable.toMap)
+    (ConsistentHashing(newTable.toMap), List()) //todo: change actions
   }
 
-  def removeMember(oldM: M): ConsistentHashing[M, P] = {
+  def removeMember(oldM: M): (ConsistentHashing[M, P], List[Change]) = {
     val newTable: MutTable[M, P] = mutable.Map(table.toSeq: _*)
     val oldPartitions: List[P] = newTable.remove(oldM).get //!
 
@@ -39,7 +40,7 @@ class ConsistentHashing[M, P](table: Table[M, P]) {
       }
     }
 
-    ConsistentHashing(newTable.toMap)
+    (ConsistentHashing(newTable.toMap), List()) //todo: change actions
   }
 
   //Helpers:

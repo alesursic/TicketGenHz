@@ -6,7 +6,7 @@ import akka.cluster.pubsub.DistributedPubSub
 import akka.cluster.{Cluster, Member, MemberStatus}
 import akka.remote.RemoteScope
 import org.checkerframework.checker.units.qual.m
-import ticket.gen.akka.untyped.core.PartitionTable.{Add, Change, Del}
+import ticket.gen.akka.untyped.core.PartitionChange.{Add, Change, Del}
 import ticket.gen.akka.untyped.set.SetDispatcher
 import ticket.gen.akka.untyped.set.SetDispatcher.{AddSetActor, RemoveSetActor}
 import akka.cluster.pubsub.DistributedPubSubMediator.{Publish, Subscribe, SubscribeAck, Unsubscribe}
